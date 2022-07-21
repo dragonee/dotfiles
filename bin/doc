@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+
+import subprocess
+import sys, os
+import signal
+
+try:
+    from colored import stylize, fg
+except ImportError:
+    def stylize(line, *args):
+        return line
+
+    def fg(*args):
+        pass
+    
+
+def sail_args(*args):
+    return [
+        './vendor/bin/sail',
+    ] + sys.argv[1:]
+
+
+def docker_with_path_args(path):
+    return [
+        'docker-compose',
+        '-f', path
+    ] + sys.argv[1:]
+
+
+def docker_without_path_args(*args):
+    return [
+        'docker-compose',
+    ] + sys.argv[1:]
+
+
+def print_and_run(func, path):
+    args = func(path)
+
+    print(stylize(' '.join(args), fg('light_green')))
+
+    return subprocess.call(args)
+
+
+def handler(signum, frame):
+    pass
+
+
+signal.signal(signal.SIGINT, handler)
+
+
+to_check = (
+    ('vendor/bin/sail', sail_args),
+    ('docker-compose.yml',  docker_without_path_args),
+    ('docker/development/docker-compose.yml', docker_with_path_args),
+)
+
+for path, func in to_check:
+    if not os.path.exists(path):
+        continue
+    
+    sys.exit(print_and_run(func, path))

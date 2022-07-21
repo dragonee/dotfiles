@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 
 """
-Run docker-compose based on educated guesses.
+What's up, doc.. ker-compose?
 
 Usage:
     doc ARGS...
 
 """
 
-from functools import wraps
+from functools import partial
 
 import subprocess
 import sys
@@ -71,23 +71,10 @@ def handler(signum, frame):
 signal.signal(signal.SIGINT, handler)
 
 
-def _curry_1(arg, wrapped: Callable) -> Callable:
-    """
-    Return a new function with n-1 arguments of `f`.
-    Bind its first argument to `arg`.
-    """
-
-    @wraps(wrapped)
-    def new_func(*args, **kwargs):
-        return wrapped(arg, *args, **kwargs)
-
-    return new_func
-
-
 def bind(arg, *funcs: Callable) -> Tuple[Callable, ...]:
     """Bind multiple functions to the same argument."""
 
-    return tuple(_curry_1(arg, f) for f in funcs)
+    return tuple(partial(f, arg) for f in funcs)
 
 
 to_check = (

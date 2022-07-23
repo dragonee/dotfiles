@@ -15,7 +15,7 @@ import sys
 import os
 import signal
 
-from typing import Callable, Tuple, Sequence
+from typing import Callable, Tuple, Sequence, List
 
 try:
     from colored import stylize, fg  # type: ignore
@@ -30,29 +30,29 @@ except ImportError:
         """Do nothing."""
 
 
-def sail_args() -> list[str]:
+def sail_args(more_args: List[str]) -> List[str]:
     """Construct call arguments for Laravel Sail command."""
 
     return [
         "./vendor/bin/sail",
-    ] + sys.argv[1:]
+    ] + more_args
 
 
-def docker_with_path_args(path: str) -> list[str]:
+def docker_with_path_args(path: str, more_args: List[str]) -> List[str]:
     """
     Construct call arguments for docker-compose command,
     explicitly providing which docker-compose.yml to use.
     """
 
-    return ["docker-compose", "-f", path] + sys.argv[1:]
+    return ["docker-compose", "-f", path] + more_args
 
 
-def docker_without_path_args() -> list[str]:
+def docker_without_path_args(more_args: List[str]) -> List[str]:
     """Construct call arguments for docker-compose command."""
 
     return [
         "docker-compose",
-    ] + sys.argv[1:]
+    ] + more_args
 
 
 def print_and_run(args: Sequence[str]) -> int:
@@ -90,4 +90,4 @@ if __name__ == "__main__":
         if not test():
             continue
 
-        sys.exit(print_and_run(func()))
+        sys.exit(print_and_run(func(sys.argv[1:])))

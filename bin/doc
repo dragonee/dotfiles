@@ -83,6 +83,9 @@ to_check = (
     bind(
         "docker/development/docker-compose.yml", os.path.exists, docker_with_path_args
     ),
+    bind(
+        "docker/local/docker-compose.yml", os.path.exists, docker_with_path_args
+    ),
 )
 
 if __name__ == "__main__":

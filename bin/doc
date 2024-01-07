@@ -81,6 +81,9 @@ to_check = (
     bind("vendor/bin/sail", os.path.exists) + (sail_args,),
     bind("docker-compose.yml", os.path.exists) + (docker_without_path_args,),
     bind(
+        "docker/development/compose.yml", os.path.exists, docker_with_path_args
+    ),
+    bind(
         "docker/development/docker-compose.yml", os.path.exists, docker_with_path_args
     ),
     bind(

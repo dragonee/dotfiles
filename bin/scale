@@ -1,0 +1,97 @@
+#!/bin/bash
+
+function add_suffix {
+    local filename=$(basename "$1")
+    local extension="${filename##*.}"
+    local basename="${filename%.*}"
+    
+    echo "$basename.$2.$extension"
+}
+
+function FUNC_normalize {
+    for file in *.{JPG,jpeg,JPEG}; do
+        local filename=$(basename "$file")
+        local basename="${filename%.*}"
+        
+        mv "$filename" "$basename.jpg"
+    done
+}
+
+function FUNC_rename {
+    re='^[0-9]+.jpg$'
+
+    for file in *.jpg; do
+        count=1
+
+        if [[ "$file" =~ $re ]]; then
+            continue
+        fi
+
+        while [ -f "$count.jpg" ]; do
+            count=$((count+1))
+        done
+
+        mv "$file" "$count.jpg"
+    done
+}
+
+function cleanup {
+    suffixes=`( set -o posix ; set ) | grep '^SCALE' | cut -f1 -d= | grep -v '^$' | sed 's/^.\{6\}//'`
+
+    echo 'cleanup'
+
+    for suffix in $suffixes; do
+        rm -rf *.$suffix.*
+    done
+}
+
+function target {
+    for var in $1; do
+        local target_name="TARGET_$var"
+        local scale_name="SCALE_$var"
+        local func_name="FUNC_$var"
+
+        if [ -n "${!target_name}" ]; then
+            echo "target $var"
+            target "${!target_name}"
+        elif [[ `type -t "$func_name"` == "function" ]]; then
+            echo "func $var"
+            $func_name
+        elif [ -n "${!scale_name}" ]; then
+            echo "scale $var"
+            scale "$var" "${!scale_name}"
+        else
+            >&2 echo "Error: no matching targets for $var"
+            exit 1
+        fi
+    done
+}
+
+function scale {
+    local suffix="$1"
+    local rules="$2"
+
+    for filename in *.jpg; do
+        destination=$(add_suffix "$filename" $suffix)
+
+        convert "$filename" -auto-orient $rules .export/"$destination"
+    done
+}
+
+if [ -f ~/.scale ]; then
+    . ~/.scale
+fi
+
+if [ -f .scale ]; then
+    . .scale
+fi
+
+cleanup
+
+mkdir .export
+
+target "$@"
+
+mv .export/* ./
+rm -rf .export
+

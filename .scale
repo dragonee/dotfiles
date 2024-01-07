@@ -1,0 +1,18 @@
+SCALE_800x600='-resize 800x600'
+SCALE_200x200='-resize 200x200^ -gravity Center -extent 200x200'
+SCALE_1280x720='-resize 1280x720 -strip'
+
+
+function FUNC_listoriginals {
+    find . -name '*.jpg' -o -name '*.png' > orig.tmp
+}
+
+function FUNC_removeoriginals {
+    rm -f `cat orig.tmp`
+    rm -f orig.tmp
+}
+
+TARGET_sol='normalize listoriginals 200x200'
+TARGET_grz='normalize listoriginals 1280x720 removeoriginals'
+TARGET_makimo='normalize listoriginals 1280x720'
+

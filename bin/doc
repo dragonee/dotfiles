@@ -14,8 +14,9 @@ import subprocess
 import sys
 import os
 import signal
+import shutil
 
-from typing import Callable, Tuple, Sequence, List
+from collections.abc import Callable, Sequence
 
 try:
     from colored import stylize, fg  # type: ignore
@@ -30,7 +31,19 @@ except ImportError:
         """Do nothing."""
 
 
-def sail_args(more_args: List[str]) -> List[str]:
+def docker_command() -> list[str]:
+    """Find the docker-compose command."""
+
+    if shutil.which("docker-compose"):
+        return ["docker-compose"]
+
+    if shutil.which("docker"):
+        return ["docker", "compose"]
+
+    raise RuntimeError("No docker-compose command found in PATH")
+
+
+def sail_args(more_args: list[str]) -> list[str]:
     """Construct call arguments for Laravel Sail command."""
 
     return [
@@ -38,21 +51,19 @@ def sail_args(more_args: List[str]) -> List[str]:
     ] + more_args
 
 
-def docker_with_path_args(path: str, more_args: List[str]) -> List[str]:
+def docker_with_path_args(path: str, more_args: list[str]) -> list[str]:
     """
     Construct call arguments for docker-compose command,
     explicitly providing which docker-compose.yml to use.
     """
 
-    return ["docker-compose", "-f", path] + more_args
+    return docker_command() + ["-f", path] + more_args
 
 
-def docker_without_path_args(more_args: List[str]) -> List[str]:
+def docker_without_path_args(more_args: list[str]) -> list[str]:
     """Construct call arguments for docker-compose command."""
 
-    return [
-        "docker-compose",
-    ] + more_args
+    return docker_command() + more_args
 
 
 def print_and_run(args: Sequence[str]) -> int:
@@ -71,7 +82,7 @@ def handler(signum, frame):
 signal.signal(signal.SIGINT, handler)
 
 
-def bind(arg, *funcs: Callable) -> Tuple[Callable, ...]:
+def bind(arg, *funcs: Callable) -> tuple[Callable]:
     """Bind multiple functions to the same argument."""
 
     return tuple(partial(f, arg) for f in funcs)
@@ -80,15 +91,11 @@ def bind(arg, *funcs: Callable) -> Tuple[Callable, ...]:
 to_check = (
     bind("vendor/bin/sail", os.path.exists) + (sail_args,),
     bind("docker-compose.yml", os.path.exists) + (docker_without_path_args,),
-    bind(
-        "docker/development/compose.yml", os.path.exists, docker_with_path_args
-    ),
+    bind("docker/development/compose.yml", os.path.exists, docker_with_path_args),
     bind(
         "docker/development/docker-compose.yml", os.path.exists, docker_with_path_args
     ),
-    bind(
-        "docker/local/docker-compose.yml", os.path.exists, docker_with_path_args
-    ),
+    bind("docker/local/docker-compose.yml", os.path.exists, docker_with_path_args),
 )
 
 if __name__ == "__main__":

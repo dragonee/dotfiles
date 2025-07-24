@@ -4,11 +4,15 @@
 What's up, doc.. ker-compose?
 
 Usage:
-    doc ARGS...
+    doc [--env ENV] ARGS...
+
+Environment Variables:
+    DOC_ENV: Environment to use (same as --env flag)
 
 """
 
 from functools import partial
+import argparse
 
 import subprocess
 import sys
@@ -60,6 +64,16 @@ def docker_with_path_args(path: str, more_args: list[str]) -> list[str]:
     return docker_command() + ["-f", path] + more_args
 
 
+def docker_with_env_args(env: str, more_args: list[str]) -> list[str]:
+    """
+    Construct call arguments for docker-compose command,
+    using environment-specific docker-compose-{env}.yml file.
+    """
+
+    path = f"docker-compose-{env}.yml"
+    return docker_command() + ["-f", path] + more_args
+
+
 def docker_without_path_args(more_args: list[str]) -> list[str]:
     """Construct call arguments for docker-compose command."""
 
@@ -88,19 +102,42 @@ def bind(arg, *funcs: Callable) -> tuple[Callable]:
     return tuple(partial(f, arg) for f in funcs)
 
 
-to_check = (
-    bind("vendor/bin/sail", os.path.exists) + (sail_args,),
-    bind("docker-compose.yml", os.path.exists) + (docker_without_path_args,),
-    bind("docker/development/compose.yml", os.path.exists, docker_with_path_args),
-    bind(
-        "docker/development/docker-compose.yml", os.path.exists, docker_with_path_args
-    ),
-    bind("docker/local/docker-compose.yml", os.path.exists, docker_with_path_args),
-)
+def get_to_check(env: str = None) -> tuple:
+    """Build the to_check tuple, optionally prioritizing environment-specific files."""
+    checks = []
+    
+    # If env is specified, check for environment-specific file first
+    if env:
+        env_file = f"docker-compose-{env}.yml"
+        checks.append(bind(env_file, os.path.exists, docker_with_path_args))
+    
+    # Add all other checks
+    checks.extend([
+        bind("vendor/bin/sail", os.path.exists) + (sail_args,),
+        bind("docker-compose.yml", os.path.exists) + (docker_without_path_args,),
+        bind("docker/development/compose.yml", os.path.exists, docker_with_path_args),
+        bind(
+            "docker/development/docker-compose.yml", os.path.exists, docker_with_path_args
+        ),
+        bind("docker/local/docker-compose.yml", os.path.exists, docker_with_path_args),
+    ])
+    
+    return tuple(checks)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="What's up, doc.. ker-compose?")
+    parser.add_argument("--env", help="Environment to use (looks for docker-compose-{env}.yml)")
+    parser.add_argument("args", nargs="*", help="Arguments to pass to docker-compose")
+    
+    parsed_args = parser.parse_args()
+    
+    # Use --env flag if provided, otherwise check DOC_ENV environment variable
+    env = parsed_args.env or os.environ.get("DOC_ENV")
+    
+    to_check = get_to_check(env)
+    
     for test, func in to_check:
         if not test():
             continue
 
-        sys.exit(print_and_run(func(sys.argv[1:])))
+        sys.exit(print_and_run(func(parsed_args.args)))

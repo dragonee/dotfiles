@@ -127,9 +127,8 @@ def get_to_check(env: str = None) -> tuple:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="What's up, doc.. ker-compose?")
     parser.add_argument("--env", help="Environment to use (looks for docker-compose-{env}.yml)")
-    parser.add_argument("args", nargs="*", help="Arguments to pass to docker-compose")
     
-    parsed_args = parser.parse_args()
+    parsed_args, unknown_args = parser.parse_known_args()
     
     # Use --env flag if provided, otherwise check DOC_ENV environment variable
     env = parsed_args.env or os.environ.get("DOC_ENV")
@@ -140,4 +139,4 @@ if __name__ == "__main__":
         if not test():
             continue
 
-        sys.exit(print_and_run(func(parsed_args.args)))
+        sys.exit(print_and_run(func(unknown_args)))

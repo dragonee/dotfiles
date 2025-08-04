@@ -45,6 +45,31 @@ function cleanup {
     done
 }
 
+function list_options {
+    echo "Available scaling options:"
+    echo ""
+    
+    echo "SCALE OPTIONS:"
+    ( set -o posix ; set ) | grep '^SCALE_' | while IFS='=' read -r name value; do
+        local option_name="${name#SCALE_}"
+        echo "  $option_name: $value"
+    done
+    echo ""
+    
+    echo "FUNCTIONS:"
+    ( set -o posix ; set ) | grep '^FUNC_' | cut -f1 -d= | while read -r name; do
+        local func_name="${name#FUNC_}"
+        echo "  $func_name"
+    done
+    echo ""
+    
+    echo "PRESET TARGETS:"
+    ( set -o posix ; set ) | grep '^TARGET_' | while IFS='=' read -r name value; do
+        local target_name="${name#TARGET_}"
+        echo "  $target_name: $value"
+    done
+}
+
 function target {
     for var in $1; do
         local target_name="TARGET_$var"
@@ -84,6 +109,20 @@ fi
 
 if [ -f .scale ]; then
     . .scale
+fi
+
+# Check for list option or no arguments
+if [ "$1" = "--list" ] || [ "$1" = "-l" ] || [ $# -eq 0 ]; then
+    if [ -f ~/.scale ]; then
+        . ~/.scale
+    fi
+    
+    if [ -f .scale ]; then
+        . .scale
+    fi
+    
+    list_options
+    exit 0
 fi
 
 cleanup

@@ -140,8 +140,18 @@ def main():
     print(f"Creating deploy path on remote: {deploy_path}")
     run(["ssh", ssh_target] + ssh_opts + [f"mkdir -p {deploy_path}"])
 
-    print("Adding public key to authorized_keys...")
-    run(["ssh", ssh_target] + ssh_opts + ["cat >> ~/.ssh/authorized_keys"], input_data=public_key)
+    # Check if public key already exists in authorized_keys
+    key_data = public_key.strip().split()[1]  # Extract just the key part (without type and comment)
+    check_result = subprocess.run(
+        ["ssh", ssh_target] + ssh_opts + [f"grep -qF '{key_data}' ~/.ssh/authorized_keys 2>/dev/null"],
+        capture_output=True,
+    )
+
+    if check_result.returncode == 0:
+        print("Public key already exists in authorized_keys, skipping...")
+    else:
+        print("Adding public key to authorized_keys...")
+        run(["ssh", ssh_target] + ssh_opts + ["cat >> ~/.ssh/authorized_keys"], input_data=public_key)
 
     print("Done!")
 

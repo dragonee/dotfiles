@@ -6,6 +6,9 @@ What's up, doc.. ker-compose?
 Usage:
     doc [--env ENV] ARGS...
 
+If a Makefile in the current directory defines a target named after the
+first argument, `make ARGS...` is run instead of docker-compose.
+
 Environment Variables:
     DOC_ENV: Environment to use (same as --env flag)
 
@@ -80,6 +83,32 @@ def docker_without_path_args(more_args: list[str]) -> list[str]:
     return docker_command() + more_args
 
 
+def make_has_target(target: str) -> bool:
+    """Check whether the Makefile in the current directory defines the given target."""
+
+    if not target or not os.path.exists("Makefile"):
+        return False
+
+    try:
+        result = subprocess.run(
+            ["make", "-n", "--question", target],
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return False
+
+    # make --question exits 0 (up to date) or 1 (needs rebuild) for known
+    # targets; 2 means an error such as "No rule to make target".
+    return result.returncode in (0, 1)
+
+
+def make_args(more_args: list[str]) -> list[str]:
+    """Construct call arguments for a make target."""
+
+    return ["make"] + more_args
+
+
 def print_and_run(args: Sequence[str]) -> int:
     """Print a command to be run and run it."""
 
@@ -102,9 +131,12 @@ def bind(arg, *funcs: Callable) -> tuple[Callable]:
     return tuple(partial(f, arg) for f in funcs)
 
 
-def get_to_check(env: str = None) -> tuple:
+def get_to_check(env: str = None, target: str = None) -> tuple:
     """Build the to_check tuple, optionally prioritizing environment-specific files."""
     checks = []
+
+    # If a Makefile defines the requested target, prefer it
+    checks.append((lambda: make_has_target(target), make_args))
     
     # If env is specified, check for environment-specific file first
     if env:
@@ -133,7 +165,8 @@ if __name__ == "__main__":
     # Use --env flag if provided, otherwise check DOC_ENV environment variable
     env = parsed_args.env or os.environ.get("DOC_ENV")
     
-    to_check = get_to_check(env)
+    target = unknown_args[0] if unknown_args else None
+    to_check = get_to_check(env, target)
     
     for test, func in to_check:
         if not test():

@@ -15,6 +15,13 @@ function FUNC_normalize {
         
         mv "$filename" "$basename.jpg"
     done
+
+    for file in *.{PNG,png}; do
+	local filename=$(basename "$file")
+	local basename="${filename%.*}"
+
+	convert "$filename" "$basename.jpg"
+    done
 }
 
 function FUNC_rename {

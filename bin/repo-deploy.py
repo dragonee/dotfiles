@@ -3,18 +3,24 @@
 
 Generates an ED25519 SSH key, sets GitHub secrets, and configures the remote server.
 
+Generated key files are removed once the secrets are set; pass --no-delete-keys
+to keep them.
+
 Usage:
     repo-deploy.py [options]
     repo-deploy.py -h | --help
 
 Options:
-    -h --help           Show this help message.
-    -i --no-interactive Skip interactive prompts, use defaults/provided values.
-    -k --key FILE       Use existing private key instead of generating a new one.
-    -p --path PATH      Deploy path on remote server [default: /home/sites/vhosts/{repo}/].
-    -u --user USER      SSH user for deployment [default: sites].
-    -H --host HOST      SSH host for deployment [default: lambdadelta.pl].
-    -P --port PORT      SSH port for deployment [default: 22].
+    -h --help            Show this help message.
+    -i --no-interactive  Skip interactive prompts, use defaults/provided values.
+    -k --key FILE        Use existing private key instead of generating a new one.
+    -p --path PATH       Deploy path on remote server [default: /home/sites/vhosts/{repo}/].
+    -u --user USER       SSH user for deployment [default: sites].
+    -H --host HOST       SSH host for deployment [default: lambdadelta.pl].
+    -P --port PORT       SSH port for deployment [default: 22].
+    --keys               Only create keys: set DEPLOY_KEY and install the public
+                         key on the remote, but set no other secrets.
+    --no-delete-keys     Do not delete generated key files after creation.
 """
 
 import os
@@ -82,14 +88,18 @@ def main():
 
     key_file = args["--key"]
 
+    keys_only = args["--keys"]
+    delete_keys = not args["--no-delete-keys"]
+
     # Parse additional secrets from .secrets file
-    extra_secrets = parse_secrets_file(".secrets")
+    extra_secrets = [] if keys_only else parse_secrets_file(".secrets")
     extra_secret_values = {key: default for key, default in extra_secrets}
 
     if not args["--no-interactive"]:
         print()
         key_file = prompt("Existing key file (empty to generate new)", key_file or "")
-        deploy_path = prompt("Deploy path", deploy_path)
+        if not keys_only:
+            deploy_path = prompt("Deploy path", deploy_path)
         deploy_user = prompt("Deploy user", deploy_user)
         deploy_host = prompt("Deploy host", deploy_host)
         deploy_port = prompt("Deploy port", deploy_port)
@@ -102,6 +112,7 @@ def main():
         print()
 
     # Get or generate SSH key
+    generated_keys = []
     if key_file:
         print(f"Using existing key: {key_file}")
         with open(key_file, "r") as f:
@@ -116,29 +127,33 @@ def main():
             "-f", repo_name,
             "-N", "",
         ])
+        generated_keys = [repo_name, f"{repo_name}.pub"]
         with open(repo_name, "r") as f:
             private_key = f.read()
         with open(f"{repo_name}.pub", "r") as f:
             public_key = f.read()
 
     # Set GitHub secrets
-    print("Setting GitHub secrets...")
+    print("Setting DEPLOY_KEY..." if keys_only else "Setting GitHub secrets...")
     run(["gh", "secret", "set", "DEPLOY_KEY"], input_data=private_key)
-    run(["gh", "secret", "set", "DEPLOY_PATH", "-b", deploy_path])
-    run(["gh", "secret", "set", "DEPLOY_USER", "-b", deploy_user])
-    run(["gh", "secret", "set", "DEPLOY_HOST", "-b", deploy_host])
-    run(["gh", "secret", "set", "DEPLOY_PORT", "-b", deploy_port])
 
-    # Set additional secrets from .secrets file
-    for key, value in extra_secret_values.items():
-        run(["gh", "secret", "set", key, "-b", value])
+    if not keys_only:
+        run(["gh", "secret", "set", "DEPLOY_PATH", "-b", deploy_path])
+        run(["gh", "secret", "set", "DEPLOY_USER", "-b", deploy_user])
+        run(["gh", "secret", "set", "DEPLOY_HOST", "-b", deploy_host])
+        run(["gh", "secret", "set", "DEPLOY_PORT", "-b", deploy_port])
+
+        # Set additional secrets from .secrets file
+        for key, value in extra_secret_values.items():
+            run(["gh", "secret", "set", key, "-b", value])
 
     # Configure remote server
     ssh_target = f"{deploy_user}@{deploy_host}"
     ssh_opts = ["-p", deploy_port]
 
-    print(f"Creating deploy path on remote: {deploy_path}")
-    run(["ssh", ssh_target] + ssh_opts + [f"mkdir -p {deploy_path}"])
+    if not keys_only:
+        print(f"Creating deploy path on remote: {deploy_path}")
+        run(["ssh", ssh_target] + ssh_opts + [f"mkdir -p {deploy_path}"])
 
     # Check if public key already exists in authorized_keys
     key_data = public_key.strip().split()[1]  # Extract just the key part (without type and comment)
@@ -152,6 +167,14 @@ def main():
     else:
         print("Adding public key to authorized_keys...")
         run(["ssh", ssh_target] + ssh_opts + ["cat >> ~/.ssh/authorized_keys"], input_data=public_key)
+
+    # Remove generated key files
+    if generated_keys and delete_keys:
+        print("Removing generated key files...")
+        for path in generated_keys:
+            os.remove(path)
+    elif generated_keys:
+        print(f"Keeping generated key files: {', '.join(generated_keys)}")
 
     print("Done!")
 

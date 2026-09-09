@@ -3,6 +3,9 @@
 
 Generates an ED25519 SSH key, sets GitHub secrets, and configures the remote server.
 
+With --vars, everything except the SSH key is stored as GitHub Actions
+variables instead of secrets; DEPLOY_KEY is always a secret.
+
 Generated key files are removed once the secrets are set; pass --no-delete-keys
 to keep them.
 
@@ -20,6 +23,8 @@ Options:
     -P --port PORT       SSH port for deployment [default: 22].
     --keys               Only create keys: set DEPLOY_KEY and install the public
                          key on the remote, but set no other secrets.
+    --vars               Store everything but DEPLOY_KEY as GitHub Actions
+                         variables instead of secrets.
     --no-delete-keys     Do not delete generated key files after creation.
 """
 
@@ -89,6 +94,7 @@ def main():
     key_file = args["--key"]
 
     keys_only = args["--keys"]
+    gh_kind = "variable" if args["--vars"] else "secret"
     delete_keys = not args["--no-delete-keys"]
 
     # Parse additional secrets from .secrets file
@@ -133,19 +139,19 @@ def main():
         with open(f"{repo_name}.pub", "r") as f:
             public_key = f.read()
 
-    # Set GitHub secrets
-    print("Setting DEPLOY_KEY..." if keys_only else "Setting GitHub secrets...")
+    # Set GitHub secrets/variables (the key is always a secret)
+    print("Setting DEPLOY_KEY..." if keys_only else f"Setting GitHub {gh_kind}s...")
     run(["gh", "secret", "set", "DEPLOY_KEY"], input_data=private_key)
 
     if not keys_only:
-        run(["gh", "secret", "set", "DEPLOY_PATH", "-b", deploy_path])
-        run(["gh", "secret", "set", "DEPLOY_USER", "-b", deploy_user])
-        run(["gh", "secret", "set", "DEPLOY_HOST", "-b", deploy_host])
-        run(["gh", "secret", "set", "DEPLOY_PORT", "-b", deploy_port])
+        run(["gh", gh_kind, "set", "DEPLOY_PATH", "-b", deploy_path])
+        run(["gh", gh_kind, "set", "DEPLOY_USER", "-b", deploy_user])
+        run(["gh", gh_kind, "set", "DEPLOY_HOST", "-b", deploy_host])
+        run(["gh", gh_kind, "set", "DEPLOY_PORT", "-b", deploy_port])
 
-        # Set additional secrets from .secrets file
+        # Set additional values from .secrets file
         for key, value in extra_secret_values.items():
-            run(["gh", "secret", "set", key, "-b", value])
+            run(["gh", gh_kind, "set", key, "-b", value])
 
     # Configure remote server
     ssh_target = f"{deploy_user}@{deploy_host}"
